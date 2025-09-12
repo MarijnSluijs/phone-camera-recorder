@@ -1,0 +1,18 @@
+[project]
+name = "phone-camera-recorder"
+version = "0.1.0"
+description = "CLI to schedule video recording on Android (Samsung S23) via adb"
+requires-python = ">=3.8"
+dependencies = [
+  "click>=8.1",
+]
+
+[project.scripts]
+pcr = "pcr.cli:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["pcr"]
