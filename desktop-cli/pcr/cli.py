@@ -60,7 +60,10 @@ def main(start_epoch_us, duration_s, lens, package, pull_to, no_audio):
     The Android app must be installed and exposes an intent that starts
     recording at the given epoch microseconds for the given duration.
     """
+
     ensure_device()
+    # Clear logcat so we only see new events
+    run_adb(["logcat", "-c"])
 
     duration_ms = int(duration_s * 1000)
 
@@ -69,7 +72,14 @@ def main(start_epoch_us, duration_s, lens, package, pull_to, no_audio):
     host_us = host_time_epoch_us()
     offset_us = device_us - host_us
 
+
     delay_us = schedule_delay_us(start_epoch_us, offset_us)
+
+    # Print start time info
+    start_dt = datetime.fromtimestamp(start_epoch_us / 1_000_000, tz=timezone.utc)
+    click.echo(f"Scheduled start time: {start_epoch_us} (epoch μs)")
+    click.echo(f"Scheduled start time: {start_dt.strftime('%Y-%m-%d %H:%M:%S.%f %Z')}")
+    click.echo(f"Duration: {duration_s:.3f} seconds")
 
     if delay_us > 0:
         click.echo(f"Waiting {delay_us/1e6:.3f}s to align start…")
@@ -91,29 +101,38 @@ def main(start_epoch_us, duration_s, lens, package, pull_to, no_audio):
     run_adb(cmd)
     click.echo("Intent sent. Waiting for device to finalize…")
 
-    # Wait for finalize message and saved file path
+
+    # Wait for finalize message and saved file path, retrying logcat fetch if needed
     pattern = re.compile(r"PCR_SAVED path=(.+)")
-    deadline = time.time() + max(10, duration_ms / 1000 + 5)
+    deadline = time.time() + max(10, duration_ms / 1000 + 10)
     saved_path = None
+    last_log = ""
     while time.time() < deadline and saved_path is None:
+        # Always fetch the latest logs
         out = run_adb(["logcat", "-d", "-s", "PCR/Main"])
-        for line in out.splitlines():
-            m = pattern.search(line)
-            if m:
-                saved_path = m.group(1).strip()
-                break
+        if out != last_log:
+            for line in out.splitlines():
+                m = pattern.search(line)
+                if m:
+                    saved_path = m.group(1).strip()
+                    break
+            last_log = out
         if saved_path is None:
             time.sleep(0.5)
 
     if not saved_path:
-        click.echo("Did not see saved file path in logs; recording may have failed.", err=True)
+        click.echo("Did not see saved file path in logs; recording may have failed. If the file is present on the phone, you can pull it manually.", err=True)
         return
 
     os.makedirs(pull_to, exist_ok=True)
     host_path = os.path.join(pull_to, os.path.basename(saved_path))
     click.echo(f"Pulling video to {host_path} …")
-    run_adb(["pull", saved_path, host_path])
-    click.echo(f"Saved: {host_path}")
+    pull_result = run_adb(["pull", saved_path, host_path])
+    click.echo(pull_result)
+    if os.path.exists(host_path):
+        click.echo(f"Saved: {host_path}")
+    else:
+        click.echo(f"Tried to pull {saved_path} but file not found on host. Check device path and permissions.", err=True)
 
 
 if __name__ == "__main__":

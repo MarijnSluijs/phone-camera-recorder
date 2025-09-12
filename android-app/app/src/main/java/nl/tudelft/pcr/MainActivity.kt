@@ -225,13 +225,14 @@ class MainActivity : ComponentActivity() {
         if (delayMs < 100) delayMs = 300
         Log.i(tag, "startScheduledRecording startUs=$effectiveStartUs nowUs=$nowUs delayMs=$delayMs durMs=${schedule.durationMs}")
 
-        val name = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis())
-        val baseDir = getExternalFilesDir(Environment.DIRECTORY_MOVIES)
-        val outDir = File(baseDir, "PCR")
-        if (!outDir.exists()) outDir.mkdirs()
-        val file = File(outDir, "PCR_${name}.mp4")
-        outputFile = file
-        val options = FileOutputOptions.Builder(file).build()
+    val name = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis())
+    // Always use app's private external files dir for Movies/PCR
+    val baseDir = getExternalFilesDir(Environment.DIRECTORY_MOVIES)
+    val outDir = File(baseDir, "PCR")
+    if (!outDir.exists()) outDir.mkdirs()
+    val file = File(outDir, "PCR_${name}.mp4")
+    outputFile = file
+    val options = FileOutputOptions.Builder(file).build()
 
         var pending: PendingRecording = videoCapture.output
             .prepareRecording(this, options)
@@ -245,11 +246,13 @@ class MainActivity : ComponentActivity() {
             recording = pending.start(ContextCompat.getMainExecutor(this)) { event ->
                 Log.i(tag, "Recorder event: $event")
                 if (event is androidx.camera.video.VideoRecordEvent.Finalize) {
+                    // Always log the actual file path, even if user moves it
                     val f = outputFile
+                    val actualPath = f?.absolutePath ?: "(null)"
                     if (f != null && f.exists()) {
-                        Log.i(tag, "PCR_SAVED path=${f.absolutePath}")
+                        Log.i(tag, "PCR_SAVED path=$actualPath")
                     } else {
-                        Log.w(tag, "Finalize received but output file missing: ${f?.absolutePath}")
+                        Log.w(tag, "Finalize received but output file missing: $actualPath")
                     }
                 }
             }

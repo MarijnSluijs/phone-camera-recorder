@@ -14,7 +14,7 @@ Quick start
 2) Build & install the Android app (Gradle or Android Studio).
 3) Use the CLI to trigger recording:
    pcr --duration-s 10 --start-epoch-us 1757685000000000 --lens ultra-wide
-   pcr --duration-s 10 --start-epoch-us 0 --lens ultra-wide --no-audio # start immediately
+   pcr --duration-s 10 --start-epoch-us 0 --lens ultra-wide --no-audio # starts immediately
 
 Notes
 - Exact ultra‑wide access is device/OS dependent. On many Samsung devices, the ultra‑wide is selected by setting zoom ratio < 1.0 via Camera2/CameraX. Fallback is the widest available camera.
