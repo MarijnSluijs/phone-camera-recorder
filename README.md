@@ -19,3 +19,29 @@ Quick start
 Notes
 - Exact ultra‑wide access is device/OS dependent. On many Samsung devices, the ultra‑wide is selected by setting zoom ratio < 1.0 via Camera2/CameraX. Fallback is the widest available camera.
 - Exact start time relies on host↔device clock offset and adb latency; the CLI compensates, but sub‑100 ms accuracy may vary.
+
+## Desktop CLI (pcr)
+
+Install (in a virtualenv)
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -e ./desktop-cli
+```
+
+Usage
+- Ensure adb is installed and the phone is connected with USB debugging enabled.
+- Install the Android app APK on the phone.
+
+Examples
+- Start at a given epoch microseconds and record 5 seconds on ultra‑wide:
+   pcr --start-epoch-us 1757685000000000 --duration-s 5 --lens ultra-wide
+
+- Start now + 2s (Linux/macOS bash):
+   now_us=$(($(date +%s%3N)*1000)); start_us=$((now_us + 2*1000000)); \
+   pcr --start-epoch-us "$start_us" --duration-s 3
+
+Notes
+- The CLI syncs device/host time offset before scheduling.
+- Start time is in DEVICE epoch microseconds.

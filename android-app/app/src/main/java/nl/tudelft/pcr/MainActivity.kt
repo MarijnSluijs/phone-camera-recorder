@@ -17,6 +17,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.MediaStoreOutputOptions
@@ -34,16 +35,24 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import android.view.Gravity
 import android.view.View
+import android.os.SystemClock
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.io.BufferedWriter
+import java.io.FileWriter
 
 class MainActivity : ComponentActivity() {
     private lateinit var previewView: PreviewView
     private val tag = "PCR/Main"
     private lateinit var overlay: TextView
     private var outputFile: File? = null
+    private var timestampFile: File? = null
+    private var timestampWriter: BufferedWriter? = null
+    private var collectingTimestamps: Boolean = false
+    private var baselineEpochUs: Long = 0
+    private var baselineElapsedNs: Long = 0
 
     private val cameraExecutor = Executors.newSingleThreadExecutor()
     private var recording: Recording? = null
@@ -127,20 +136,53 @@ class MainActivity : ComponentActivity() {
         provider.addListener({
             val cameraProvider = provider.get()
             val cameraSelector = selectCameraSelector(schedule?.lens?.lowercase())
-            val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(previewView.surfaceProvider)
-            }
+            // Ensure camera output is oriented for landscape recording
+            val rotation = previewView.display?.rotation ?: android.view.Surface.ROTATION_0
+            val preview = Preview.Builder()
+                .setTargetRotation(rotation)
+                .build().also {
+                    it.setSurfaceProvider(previewView.surfaceProvider)
+                }
 
             val recorder = Recorder.Builder()
                 .setQualitySelector(QualitySelector.from(Quality.FHD, FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)))
                 .build()
-            val videoCapture = VideoCapture.withOutput(recorder)
+            val videoCapture = VideoCapture.withOutput(recorder).apply {
+                // Align capture rotation with the current display rotation (landscape)
+                targetRotation = rotation
+            }
+
+            // Image analysis for per-frame timestamps
+            val analysis = ImageAnalysis.Builder()
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_BLOCK_PRODUCER)
+                .build().also { ia ->
+                    ia.setAnalyzer(cameraExecutor) { image ->
+                        try {
+                            if (collectingTimestamps) {
+                                val tsNs = image.imageInfo.timestamp
+                                // Map camera timestamp (ns since boot) to epoch microseconds
+                                val epochUs = baselineEpochUs + (tsNs - baselineElapsedNs) / 1000
+                                val w = timestampWriter
+                                if (w != null) {
+                                    synchronized(w) {
+                                        w.write(epochUs.toString())
+                                        w.newLine()
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.w(tag, "Timestamp write failed: ${e.message}")
+                        } finally {
+                            image.close()
+                        }
+                    }
+                }
 
             try {
                 cameraProvider.unbindAll()
 
                 fun tryBind(sel: CameraSelector): androidx.camera.core.Camera? = try {
-                    cameraProvider.bindToLifecycle(this, sel, preview, videoCapture)
+                    cameraProvider.bindToLifecycle(this, sel, preview, videoCapture, analysis)
                 } catch (e: Exception) {
                     Log.w(tag, "bind failed for selector: $sel -> ${e.message}")
                     null
@@ -243,17 +285,56 @@ class MainActivity : ComponentActivity() {
 
         previewView.postDelayed({
             Log.i(tag, "Starting recording now…")
+            // Prepare timestamp file next to mp4
+            val out = outputFile
+            if (out != null) {
+                val tsFile = File(out.parentFile, out.nameWithoutExtension + ".txt")
+                timestampFile = tsFile
+                try {
+                    timestampWriter = BufferedWriter(FileWriter(tsFile, false))
+                    Log.i(tag, "PCR_TS_OPEN path=${tsFile.absolutePath}")
+                } catch (e: Exception) {
+                    Log.w(tag, "Failed to open timestamp file: ${e.message}")
+                }
+            }
+
             recording = pending.start(ContextCompat.getMainExecutor(this)) { event ->
                 Log.i(tag, "Recorder event: $event")
-                if (event is androidx.camera.video.VideoRecordEvent.Finalize) {
-                    // Always log the actual file path, even if user moves it
-                    val f = outputFile
-                    val actualPath = f?.absolutePath ?: "(null)"
-                    if (f != null && f.exists()) {
-                        Log.i(tag, "PCR_SAVED path=$actualPath")
-                    } else {
-                        Log.w(tag, "Finalize received but output file missing: $actualPath")
+                when (event) {
+                    is androidx.camera.video.VideoRecordEvent.Start -> {
+                        // Establish baseline mapping from elapsed ns to epoch us
+                        baselineEpochUs = System.currentTimeMillis() * 1000
+                        baselineElapsedNs = SystemClock.elapsedRealtimeNanos()
+                        collectingTimestamps = true
                     }
+                    is androidx.camera.video.VideoRecordEvent.Finalize -> {
+                        collectingTimestamps = false
+                        // Always log the actual file path, even if user moves it
+                        val f = outputFile
+                        val actualPath = f?.absolutePath ?: "(null)"
+                        if (f != null && f.exists()) {
+                            Log.i(tag, "PCR_SAVED path=$actualPath")
+                        } else {
+                            Log.w(tag, "Finalize received but output file missing: $actualPath")
+                        }
+                        val tf = timestampFile
+                        val tsPath = tf?.absolutePath ?: "(null)"
+                        if (tf != null && tf.exists()) {
+                            Log.i(tag, "PCR_SAVED_TS path=$tsPath")
+                        } else {
+                            Log.w(tag, "Timestamp file missing or empty: $tsPath")
+                        }
+                        // Close writer
+                        try {
+                            val w = timestampWriter
+                            if (w != null) {
+                                synchronized(w) { w.flush() }
+                                w.close()
+                            }
+                        } catch (_: Exception) {}
+                        timestampWriter = null
+                    }
+                    else -> {}
                 }
             }
             overlay.text = "Recording…"
@@ -269,6 +350,15 @@ class MainActivity : ComponentActivity() {
             recording?.stop()
         } catch (_: Exception) {}
         recording = null
+        collectingTimestamps = false
+        try {
+            val w = timestampWriter
+            if (w != null) {
+                synchronized(w) { w.flush() }
+                w.close()
+            }
+        } catch (_: Exception) {}
+        timestampWriter = null
         overlay.visibility = View.GONE
         Log.i(tag, "Recording stopped; finishing")
         finish()

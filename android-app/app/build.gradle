@@ -32,6 +32,18 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
+    // Ensure JDK 17 toolchain is used (downloaded if missing)
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// Use Java toolchain 17 for Kotlin and Java compilation
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
 }
 
 dependencies {

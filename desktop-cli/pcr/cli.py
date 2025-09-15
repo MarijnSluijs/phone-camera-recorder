@@ -6,9 +6,30 @@ from datetime import datetime, timezone
 import click
 import os
 import re
+from pathlib import Path
 
 PACKAGE = "nl.tudelft.pcr"
 ACTIVITY = "nl.tudelft.pcr/.MainActivity"
+
+
+def _default_data_dir() -> str:
+    # Env override first
+    env_dir = os.environ.get("PCR_DATA_DIR")
+    if env_dir:
+        return str(Path(env_dir).expanduser())
+    # Try to locate repo root based on this file's path (works best in editable installs)
+    here = Path(__file__).resolve()
+    for p in list(here.parents):
+        if (p / ".git").exists() and (p / "android-app").exists() and (p / "desktop-cli").exists():
+            return str(p / "data")
+    # Fallback: parent that contains both android-app and desktop-cli
+    for p in list(here.parents):
+        if (p / "android-app").exists() and (p / "desktop-cli").exists():
+            return str(p / "data")
+    # Last resort: current working directory
+    return str(Path.cwd() / "data")
+
+DEFAULT_PULL_TO = _default_data_dir()
 
 
 def run_adb(args):
@@ -52,7 +73,13 @@ def schedule_delay_us(start_epoch_us, offset_us):
 @click.option("--duration-s", type=float, required=True, help="Duration in seconds")
 @click.option("--lens", type=click.Choice(["ultra-wide", "back", "front"]), default="ultra-wide")
 @click.option("--package", default=PACKAGE, show_default=True, help="Android app package")
-@click.option("--pull-to", type=click.Path(file_okay=False, dir_okay=True, resolve_path=True), default=os.path.join(os.getcwd(), "data"), show_default=True, help="Directory on host to store pulled videos")
+@click.option(
+    "--pull-to",
+    type=click.Path(file_okay=False, dir_okay=True, resolve_path=True),
+    default=DEFAULT_PULL_TO,
+    show_default=True,
+    help="Directory on host to store pulled videos (override with PCR_DATA_DIR env or this flag)",
+)
 @click.option("--no-audio", is_flag=True, help="Disable audio recording")
 def main(start_epoch_us, duration_s, lens, package, pull_to, no_audio):
     """Schedule a video recording on a connected Android phone.
@@ -102,22 +129,28 @@ def main(start_epoch_us, duration_s, lens, package, pull_to, no_audio):
     click.echo("Intent sent. Waiting for device to finalize…")
 
 
-    # Wait for finalize message and saved file path, retrying logcat fetch if needed
-    pattern = re.compile(r"PCR_SAVED path=(.+)")
+    # Wait for finalize messages and saved file paths, retrying logcat fetch if needed
+    pattern_video = re.compile(r"PCR_SAVED path=(.+)")
+    pattern_ts = re.compile(r"PCR_SAVED_TS path=(.+)")
     deadline = time.time() + max(10, duration_ms / 1000 + 10)
     saved_path = None
+    saved_ts_path = None
     last_log = ""
-    while time.time() < deadline and saved_path is None:
+    while time.time() < deadline and (saved_path is None or saved_ts_path is None):
         # Always fetch the latest logs
         out = run_adb(["logcat", "-d", "-s", "PCR/Main"])
         if out != last_log:
             for line in out.splitlines():
-                m = pattern.search(line)
-                if m:
-                    saved_path = m.group(1).strip()
-                    break
+                if saved_path is None:
+                    m = pattern_video.search(line)
+                    if m:
+                        saved_path = m.group(1).strip()
+                if saved_ts_path is None:
+                    m2 = pattern_ts.search(line)
+                    if m2:
+                        saved_ts_path = m2.group(1).strip()
             last_log = out
-        if saved_path is None:
+        if saved_path is None or saved_ts_path is None:
             time.sleep(0.5)
 
     if not saved_path:
@@ -133,6 +166,32 @@ def main(start_epoch_us, duration_s, lens, package, pull_to, no_audio):
         click.echo(f"Saved: {host_path}")
     else:
         click.echo(f"Tried to pull {saved_path} but file not found on host. Check device path and permissions.", err=True)
+
+    # If we found a timestamp file, pull it as well
+    if saved_ts_path:
+        host_ts_path = os.path.join(pull_to, os.path.basename(saved_ts_path))
+        click.echo(f"Pulling timestamps to {host_ts_path} …")
+        pull_ts_result = run_adb(["pull", saved_ts_path, host_ts_path])
+        click.echo(pull_ts_result)
+        if os.path.exists(host_ts_path):
+            click.echo(f"Saved timestamps: {host_ts_path}")
+        else:
+            click.echo(f"Tried to pull {saved_ts_path} but file not found on host.", err=True)
+    else:
+        # Fallback: infer .txt next to the mp4 and pull if present
+        guess_ts = re.sub(r"\.mp4$", ".txt", saved_path)
+        probe = run_adb(["shell", "if", "[", "-f", guess_ts, "];", "then", "echo", "EXISTS;", "else", "echo", "MISSING;", "fi"])
+        if "EXISTS" in probe:
+            host_ts_path = os.path.join(pull_to, os.path.basename(guess_ts))
+            click.echo(f"Pulling timestamps (inferred) to {host_ts_path} …")
+            pull_ts_result = run_adb(["pull", guess_ts, host_ts_path])
+            click.echo(pull_ts_result)
+            if os.path.exists(host_ts_path):
+                click.echo(f"Saved timestamps: {host_ts_path}")
+            else:
+                click.echo(f"Tried to pull {guess_ts} but file not found on host.", err=True)
+        else:
+            click.echo("No timestamp file reported by logs and none found next to the mp4; skipping timestamps pull.")
 
 
 if __name__ == "__main__":

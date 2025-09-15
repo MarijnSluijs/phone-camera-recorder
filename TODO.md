@@ -1,0 +1,2 @@
+- keep app open, even after screen time out
+- check resolution
