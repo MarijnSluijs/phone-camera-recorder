@@ -21,7 +21,12 @@ pip install -e ./desktop-cli
 
 #### Usage
 - Ensure adb is installed and the phone is connected via USB, with USB debugging enabled.
-- Install the Android app APK on the phone.
+- Install the Android app APK on the phone:
+```bash
+cd android-app
+.\gradlew.bat installDebug
+adb install -r .android\app\build\outputs\apk\debug\app-debug.apk
+```
 - Run the desktop CLI `pcr` to schedule and trigger a recording.
 - After recording, the video is sent to the computer and stored in current directory in /data.
 

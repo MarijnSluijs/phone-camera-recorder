@@ -14,7 +14,7 @@
         android:supportsRtl="true">
         <activity
             android:name=".MainActivity"
-            android:screenOrientation="portrait"
+            android:screenOrientation="sensorLandscape"
             android:exported="true"
             android:launchMode="singleTop">
             <intent-filter>

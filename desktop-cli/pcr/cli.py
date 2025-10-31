@@ -1,3 +1,7 @@
+"""
+CLI to schedule and trigger video recording on an Android phone via adb.
+"""
+
 import re
 import subprocess
 import sys
@@ -62,7 +66,8 @@ def ensure_device():
     out = run_adb(["get-state"])  # returns 'device' when ready
     if out.strip() != "device":
         click.echo(
-            "PHONE-CAMERA-RECORDER: No adb device ready. Run 'adb devices' and ensure it's authorized.",
+            "PHONE-CAMERA-RECORDER: No adb device ready. " \
+            "Run 'adb devices' and ensure it's authorized.",
             err=True,
         )
         sys.exit(1)
@@ -138,7 +143,8 @@ def pcr_main(
     # Print start time info
     start_dt = datetime.fromtimestamp(start_epoch_us / 1_000_000, tz=timezone.utc)
     click.echo(f"PHONE-CAMERA-RECORDER: Scheduled start time: {start_epoch_us} (epoch μs)")
-    click.echo(f"PHONE-CAMERA-RECORDER: Scheduled start time: {start_dt.strftime('%Y-%m-%d %H:%M:%S.%f %Z')}")
+    click.echo(f"PHONE-CAMERA-RECORDER: Scheduled start time: " \
+               f"{start_dt.strftime('%Y-%m-%d %H:%M:%S.%f %Z')}")
     click.echo(f"PHONE-CAMERA-RECORDER: Duration: {duration_s:.3f} seconds")
 
     if delay_us > 0:
@@ -213,7 +219,8 @@ def pcr_main(
         click.echo(f"PHONE-CAMERA-RECORDER: Saved: {host_path}")
     else:
         click.echo(
-            f"PHONE-CAMERA-RECORDER: Tried to pull {saved_path} but file not found on host. Check device path and permissions.",
+            f"PHONE-CAMERA-RECORDER: Tried to pull {saved_path} but file not found on host. "
+            f"Check device path and permissions.",
             err=True,
         )
         host_path = None
@@ -229,7 +236,8 @@ def pcr_main(
             click.echo(f"PHONE-CAMERA-RECORDER: Saved timestamps: {host_ts_path}")
         else:
             click.echo(
-                f"PHONE-CAMERA-RECORDER: Tried to pull {saved_ts_path} but file not found on host.", err=True
+                f"PHONE-CAMERA-RECORDER: Tried to pull {saved_ts_path} but "
+                f"file not found on host.", err=True
             )
             host_ts_path = None
     else:
@@ -261,12 +269,14 @@ def pcr_main(
                 click.echo(f"PHONE-CAMERA-RECORDER: Saved timestamps: {host_ts_path}")
             else:
                 click.echo(
-                    f"PHONE-CAMERA-RECORDER: Tried to pull {guess_ts} but file not found on host.", err=True
+                    f"PHONE-CAMERA-RECORDER: Tried to pull {guess_ts} but "
+                    f"file not found on host.", err=True
                 )
                 host_ts_path = None
         else:
             click.echo(
-                "PHONE-CAMERA-RECORDER: No timestamp file reported by logs and none found next to the mp4; skipping timestamps pull."
+                "PHONE-CAMERA-RECORDER: No timestamp file reported by logs and none "
+                "found next to the mp4; skipping timestamps pull."
             )
             host_ts_path = None
 
