@@ -1,2 +1,4 @@
 - keep app open, even after screen time out
 - check resolution
+- Flip video to landscape
+- fix preview on phone
