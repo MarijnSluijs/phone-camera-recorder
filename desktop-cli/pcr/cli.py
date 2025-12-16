@@ -66,7 +66,7 @@ def ensure_device():
     out = run_adb(["get-state"])  # returns 'device' when ready
     if out.strip() != "device":
         click.echo(
-            "PHONE-CAMERA-RECORDER: No adb device ready. " \
+            "PHONE-CAMERA-RECORDER: No adb device ready. "
             "Run 'adb devices' and ensure it's authorized.",
             err=True,
         )
@@ -142,13 +142,19 @@ def pcr_main(
 
     # Print start time info
     start_dt = datetime.fromtimestamp(start_epoch_us / 1_000_000, tz=timezone.utc)
-    click.echo(f"PHONE-CAMERA-RECORDER: Scheduled start time: {start_epoch_us} (epoch μs)")
-    click.echo(f"PHONE-CAMERA-RECORDER: Scheduled start time: " \
-               f"{start_dt.strftime('%Y-%m-%d %H:%M:%S.%f %Z')}")
+    click.echo(
+        f"PHONE-CAMERA-RECORDER: Scheduled start time: {start_epoch_us} (epoch μs)"
+    )
+    click.echo(
+        f"PHONE-CAMERA-RECORDER: Scheduled start time: "
+        f"{start_dt.strftime('%Y-%m-%d %H:%M:%S.%f %Z')}"
+    )
     click.echo(f"PHONE-CAMERA-RECORDER: Duration: {duration_s:.3f} seconds")
 
     if delay_us > 0:
-        click.echo(f"PHONE-CAMERA-RECORDER: Waiting {delay_us / 1e6:.3f}s to align start…")
+        click.echo(
+            f"PHONE-CAMERA-RECORDER: Waiting {delay_us / 1e6:.3f}s to align start…"
+        )
         time.sleep(delay_us / 1_000_000)
 
     # Launch activity with typed extras to avoid shell quoting issues
@@ -203,8 +209,8 @@ def pcr_main(
 
     if not saved_path:
         click.echo(
-            "PHONE-CAMERA-RECORDER: Did not see saved file path in logs; " \
-            "recording may have failed. If the file is present on the phone, " \
+            "PHONE-CAMERA-RECORDER: Did not see saved file path in logs; "
+            "recording may have failed. If the file is present on the phone, "
             "you can pull it manually.",
             err=True,
         )
@@ -237,7 +243,8 @@ def pcr_main(
         else:
             click.echo(
                 f"PHONE-CAMERA-RECORDER: Tried to pull {saved_ts_path} but "
-                f"file not found on host.", err=True
+                f"file not found on host.",
+                err=True,
             )
             host_ts_path = None
     else:
@@ -262,7 +269,9 @@ def pcr_main(
         )
         if "EXISTS" in probe:
             host_ts_path = Path(pull_to) / Path(guess_ts).name
-            click.echo(f"PHONE-CAMERA-RECORDER: Pulling timestamps (inferred) to {host_ts_path} …")
+            click.echo(
+                f"PHONE-CAMERA-RECORDER: Pulling timestamps (inferred) to {host_ts_path} …"
+            )
             pull_ts_result = run_adb(["pull", guess_ts, str(host_ts_path)])
             click.echo(f"PHONE-CAMERA-RECORDER: {pull_ts_result}")
             if host_ts_path and host_ts_path.exists():
@@ -270,7 +279,8 @@ def pcr_main(
             else:
                 click.echo(
                     f"PHONE-CAMERA-RECORDER: Tried to pull {guess_ts} but "
-                    f"file not found on host.", err=True
+                    f"file not found on host.",
+                    err=True,
                 )
                 host_ts_path = None
         else:

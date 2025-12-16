@@ -136,8 +136,8 @@ class MainActivity : ComponentActivity() {
         provider.addListener({
             val cameraProvider = provider.get()
             val cameraSelector = selectCameraSelector(schedule?.lens?.lowercase())
-            // Ensure camera output is oriented for landscape recording
-            val rotation = previewView.display?.rotation ?: android.view.Surface.ROTATION_0
+            // Force landscape orientation (90 degrees counter-clockwise from portrait)
+            val rotation = android.view.Surface.ROTATION_90
             val preview = Preview.Builder()
                 .setTargetRotation(rotation)
                 .build().also {
@@ -148,7 +148,7 @@ class MainActivity : ComponentActivity() {
                 .setQualitySelector(QualitySelector.from(Quality.FHD, FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)))
                 .build()
             val videoCapture = VideoCapture.withOutput(recorder).apply {
-                // Align capture rotation with the current display rotation (landscape)
+                // Align capture rotation for landscape (90 degrees)
                 targetRotation = rotation
             }
 
