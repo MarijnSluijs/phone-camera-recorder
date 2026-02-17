@@ -144,13 +144,19 @@ class MainActivity : ComponentActivity() {
                     it.setSurfaceProvider(previewView.surfaceProvider)
                 }
 
+            val qualitySelector = QualitySelector.fromOrderedList(
+                listOf(Quality.UHD, Quality.FHD),
+                FallbackStrategy.higherQualityOrLowerThan(Quality.FHD)
+            )
+            Log.i(tag, "Creating recorder with quality selector: UHD/FHD preferred, FHD minimum")
             val recorder = Recorder.Builder()
-                .setQualitySelector(QualitySelector.from(Quality.FHD, FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)))
+                .setQualitySelector(qualitySelector)
                 .build()
             val videoCapture = VideoCapture.withOutput(recorder).apply {
                 // Align capture rotation for landscape (90 degrees)
                 targetRotation = rotation
             }
+            Log.i(tag, "VideoCapture created with target rotation: $rotation")
 
             // Image analysis for per-frame timestamps
             val analysis = ImageAnalysis.Builder()
@@ -202,6 +208,12 @@ class MainActivity : ComponentActivity() {
                     finish()
                     return@addListener
                 }
+
+                // Log the supported video qualities
+                val supportedQualities = QualitySelector.getSupportedQualities(camera.cameraInfo)
+                Log.i(tag, "Camera bound successfully. Supported qualities: $supportedQualities")
+                val videoQuality = videoCapture.currentConfig.toString()
+                Log.i(tag, "VideoCapture config: $videoQuality")
 
                 val lensPref = schedule?.lens?.lowercase()
                 if (lensPref == null || lensPref == "ultra-wide") {
